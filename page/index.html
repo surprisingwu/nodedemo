@@ -16,7 +16,38 @@
     </ul>
     <input type="text" placeholder="请输入您的todolist" id="iput">
     <button class="btn" id="btn">Add Item</button>
-    <script src="js/index.js"></script>
+    <script src='js/summer.js'></script>
+    <script src='js/jquery.js'></script>
+    <script src="js/spring.js"></script>
 </body>
+<script>
+    $(function () {
+        spring.setConfig({
+            ip: '10.80.38.121',
+            port: '8130',
+            controller:'com.chamc.ydsp.controller.HRYdspController'
+        })
+        spring.getData({
+            action: 'handler',
+            appid: 'HRMeap',
+            params: {
+                "chamc_mobiletoken": '7fb192409c31d3f5f27fb268e1e497eeb2a17c9a98f26b66b990e09cd8039763' ,
+                "transtype": "urlparamrequest",
+                "contextmapping": '{"result" : "result"}',
+                "reqmethod": "POST",
+                "requrl": 'http://projectmanagebak.chamc.com.cn/WFWebApi/Api/workflow/CusWaittingList',
+            },
+            "header": {
+                "chamc_mobiletoken": '7fb192409c31d3f5f27fb268e1e497eeb2a17c9a98f26b66b990e09cd8039763'
+            },
+            success: function (data) {
+                console.log(data)
+            },
+            error: function (err) {
+                alert(JSON.stringify(err))
+            }
+        })
+    })
 
+</script>
 </html>

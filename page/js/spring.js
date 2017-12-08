@@ -1,49 +1,35 @@
 // 必须是先初始化才能拿到spring实例
-var spring = (function() {
+;(function (window) {
     // 可以放一些私有变量
     function Spring(options) {
-        // options{type:'callMa/callNative'}
-        this.init(options)
+        this.isHttps = false
     }
+
     // 公有方法，存放在原型对象中
     Spring.prototype = {
         'constructor': Spring,
-        init: function(options) {
-            if (options.type === 'callNative') {
-                this.controller = options.controller
-            } else {
-                this.ip = options.ip
-                this.port = options.port
-                this.controller = options.contextmapping
+        checkObj: function (type) {
+            return function (obj) {
+                return Object.prototype.toString.call(obj) === '[object ' + type + ']'
             }
         },
-        proxy: function() {
-            if (!(this.ip || this.port)) {
-                throw new Error('请设置IP和PORT！')
-                return
-            }
-            return "http://" + this.ip + ":" + this.port + "/umserver/core"
-        },
-        isMobile: function() {
+        isMobile: function () {
             var regexp = /(android|os) (\d{1,}(\.|\_)\d{1,})/
-            return regexp.test(spring.userAgent())
+            return regexp.test(this.userAgent())
         },
-        isIphone: function() {
+        isIphone: function () {
             var regexp = /iphone|ipad|ipod/
-            return regexp.test(spring.userAgent())
+            return regexp.test(this.userAgent())
         },
-        isAndroid: function() {
+        isAndroid: function () {
             var regexp = /android/
-            return regexp.test(spring.userAgent())
+            return regexp.test(this.userAgent())
         },
-        userAgent: function() {
+        userAgent: function () {
             return navigator.userAgent.toLowerCase()
         },
-        isUndefined: function(data) {
-
-        },
         // date: dateObj  fmt:日期格式
-        formatDate: function(date, fmt) {
+        formatDate: function (date, fmt) {
             var o = {
                 "M+": date.getMonth() + 1, //月份 
                 "d+": date.getDate(), //日 
@@ -64,11 +50,11 @@ var spring = (function() {
             return fmt;
         },
         // 补0
-        padLeftZero: function(str) {
+        padLeftZero: function (str) {
             return ('00' + str).substr(str.length)
         },
         // 等比缩放图片 
-        compressImg: function(image, maxWidth, maxHeight) {
+        compressImg: function (image, maxWidth, maxHeight) {
             var maxWidth = maxWidth;
             var maxHeight = maxHeight;
             var hRatio;
@@ -97,7 +83,7 @@ var spring = (function() {
             return imgDom;
         },
         // 保存数据到本地
-        setStorage: function(key, value) {
+        setStorage: function (key, value) {
             var saveObj = window.localStorage._saveObj_;
             if (!saveObj) {
                 saveObj = {}
@@ -108,7 +94,7 @@ var spring = (function() {
             window.localStorage._saveObj_ = JSON.stringify(saveObj);
         },
         // 从本地加载数据 def:为默认值
-        getStorage: function(key, def) {
+        getStorage: function (key, def) {
             var saveObj = window.localStorage._saveObj_
             if (!saveObj) {
                 return def
@@ -118,7 +104,7 @@ var spring = (function() {
             return ret || def
         },
         // 从本地存储中移除某一个属性
-        removeStorageItem: function(key) {
+        removeStorageItem: function (key) {
             var saveObj = window.localStorage._saveObj_;
             if (saveObj) {
                 saveObj = JSON.parse(saveObj);
@@ -127,11 +113,11 @@ var spring = (function() {
             }
         },
         // 清除所有的存储
-        clearStorage: function() {
+        clearStorage: function () {
             window.localStorage.clear()
         },
         // 获取url里面的一些参数
-        getQueryByName: function(name) {
+        getQueryByName: function (name) {
             var params = decodeURI(location.search);
             var result = params.match(new RegExp("[\?\&]" + name + "=([^\&]+)", "i"));
             if (result == null || result.length < 1) {
@@ -140,7 +126,7 @@ var spring = (function() {
             return result[1];
         },
         // url后面拼接参数, 
-        addUrlParam: function(url, name, value) {
+        addUrlParam: function (url, name, value) {
             // 拼接的参数多时,可以传一个url,一个json.单个时可以传url,key,valu
             url += (url.indexOf("?") == -1 ? "?" : "&");
             if (arguments.length === 3) {
@@ -153,111 +139,161 @@ var spring = (function() {
             }
             return url;
         },
-        getData: function(options) {
-            // 如果开启https的话，目前请求需要走原生
-            if (this._requestParams.ishttps) {
-                if (spring.isMobile()) {
-                    // 走原生 或者 ma
-                    $.callServiceNative(options)
-                } else {
-                    // pc调式，ajax
-                    $._requestAjax(options)
-                }
-
-            } else {
-                if (spring.isMobile()) {
-                    // 走原生 或者 ma
-                    $.callAction(options)
-                } else {
-                    // pc调式，ajax
-                    $._requestAjax(options)
-                }
+        protocol: function () {
+            return this.isHttps ? 'https://' : 'http://'
+        },
+        // 访问ma,需先设置ip和端口,以及ma的controller
+        setConfig: function (options) {
+            if (options.ip && options.port && options.controller) {
+                this.ip = options.ip
+                this.port = options.port
+                this.controller = options.controller
             }
-
+        },
+        openHttps: function () {
+            this.isHttps = true
+        },
+        // 用来请求ma的
+        getData: function (options) {
+            // 如果开启https的话，目前请求需要走原生
+            if (!(this.ip && this.port && this.controller)) {
+                throw new Error('请先设置MA的ip、port、和controller！')
+            }
+            this.appid = this._checkAttribute(options, 'appid', 'test')
+            this.action = this._checkAttribute(options, 'action', 'handler')
+            if (this.isMobile()) {
+                this.callAction(options)
+            } else {
+                this._requestAjax(options)
+            }
         },
         // ip: string ,port:string
-        writeConfig: function(ip, port) {
+        writeConfig: function (ip, port) {
             summer.writeConfig({
-                'host': ip || appsettings.params.requestParams.ip, //向configure中写入host键值
-                'port': port || appsettings.params.requestParams.port //向configure中写入port键值
+                'host': this.ip,
+                'port': this.port
             })
         },
         // options: {action: "",params:{},sucess: fn,error: fn,timeout: num}
-        callAction: function(options) {
-            // 拿到前面设置的参数
-            var requestParams = this._requestParams
-                // ip,port可以前面设置,也可以动态的获取
-            var ip = spring.getStorage("ip") ? spring.getStorage("ip") : requestParams.ip;
-            var port = spring.getStorage("port") ? spring.getStorage("port") : requestParams.port;
-            $.writeConfig(ip, port)
+        callAction: function (options) {
+            this.writeConfig()
+            summer.callAction(this._handleParams(options))
+        },
+        // 获取用户的信息,如token,usercode等
+        getUserMesg: function (settings) {
+            var options = {
+                params: {
+                    transtype: 'request_token'
+                },
+                callback: settings.callback,
+                error: settings.error
+            }
+            this.callServiceNative(options, this._checkAttribute(settings,'async','false'))
+        },
+        // options:{callback:fn,error:fn,innerparams:{},controllerId:str[,async:bol]}
+        callService: function (settings) {
             var params = {
-                'appid': requestParams.appid, //当前应用id
-                'viewid': requestParams.viewid, //后台带包名的Controller名
-                'action': options.action || requestParams.action, //方法名
-                'params': options.params, //自定义参数
-                'callback': mycallback, //请求回来后执行的js方法
-                'timeout': options.timeout || 10, // 请求ma的超时时间,summer底层默认的也是10s
-                'error': myerror, //失败回调的js方法
-                'header': {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': 'imgfornote'
-                }
+                params: {
+                    transtype: 'serviceCall',
+                    controllerId: settings.controller
+                },
+                callback: settings.callback,
+                error: settings.error
             }
-
-            function mycallback(data) {
-                options.success(data); // 处理数据,去掉一些不必要的包裹层
+            if (settings.innerParams) {
+                params.params.innerParams = settings.innerParams
             }
-
-            function myerror(data) {
-                options.error(data) // 数据处理
+            this.callServiceNative(params, this._checkAttribute(settings, 'async', 'false'))
+        },
+       // options:{callback:fn,error:fn,quality:str,maxWidth:str,maxHeight:str}
+        openalbum: function (settings) {
+            var params = {
+                params: {
+                    transtype: 'openalbum',
+                    quality: this._checkAttribute(settings,'quality','0.85')
+                },
+                callback: settings.callback,
+                error: settings.error
             }
-            summer.callAction(params)
+            if (settings.maxHeight&&settings.maxWidth) {
+                params.params.maxWidth = settings.maxWidth
+                params.params.maxHeight = settings.maxHeight
+            }
+            this.callServiceNative(params, this._checkAttribute(settings, 'async', 'false'))
+        },
+        openCamara: function (settings) {
+            var params = {
+                params: {
+                    transtype: 'takephote'
+                },
+                callback: settings.callback,
+                error: settings.error
+            }
+            if (settings.isCut){
+                params.params.isCut = settings.isCut
+            }
+            this.callServiceNative(params, this._checkAttribute(settings, 'async', 'false'))
+        },
+        _checkAttribute: function (obj, key, def) {
+            return obj[key] === undefined ? def : obj[key]
+        },
+        _handleParams: function (options) {
+            // 默认的头部信息
+            var header = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'imgfornote'
+            }
+            var params = {
+                'appid': this._checkAttribute(options, 'appid', 'test'),
+                'viewid': this._checkAttribute(options, 'controller', this.controller),
+                'action': this._checkAttribute(options, 'action', 'handler'),
+                'params': options.params,
+                'callback': options.success,
+                'timeout': this._checkAttribute(options, 'timeout', 10),
+                'error': options.error,
+                'header': this._checkAttribute(options, 'header', header)
+            }
+            return params
         },
         // 谷歌浏览器  属性 目标文件   加上 --args  --disable-web-security --user-data-dir解除谷歌安全策略
-        _requestAjax: function(options) {
-            var tempData = this._requestParams.params
+        _requestAjax: function (options) {
+            var header = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'imgfornote'
+            }
+            var tempData = this.setRequestParams(this.appid, this.action, this._checkAttribute(options, 'params', {}))
             var data = {
                 tip: "none",
                 data: ''
             };
-            var proxyIp = this._requestParams.ip,
-                httpMesg = "http",
-                proxyPort = this._requestParams.port;
-            tempData.servicecontext.actionid = options.action || this._requestParams.action
-            tempData.servicecontext.params = options.params
             data.data = JSON.stringify(tempData)
-            if (this._requestParams.ishttps) {
-                httpMesg = "https"
-            }
-            if (spring.getStorage("ip") && spring.getStorage("port")) {
-                proxyIp = spring.getStorage("ip")
-                proxyPort = spring.getStorage("port")
-            }
-
             $.ajax({
-                url: httpMesg + "://" + proxyIp + ":" + proxyPort + "/umserver/core",
-                data: data,
-                timeout: options.timeout || 10, // 可以根据需要自己设置超时时间
+                url: this.protocol() + this.ip + ":" + this.port + "/umserver/core",
+                data: $.param(data),
+                type: "POST",
+                contentType: 'application/x-www-form-urlencoded; charset=UTF-8',
+                timeout: this._checkAttribute(options, 'timeout', 10)*1000,
                 dataType: "json",
-                success: function(data) {
+                header: this._checkAttribute(options, 'header', header),
+                success: function (data) {
                     // 数据处理
                     options.success(data)
                 },
-                error: function(e) {
+                error: function (e) {
                     options.error(e)
                 }
             })
         },
         // 监听物理返回键,  传一个回调
-        onWatchBackBtn: function(callback) {
-            document.addEventListener("deviceready", function() {
-                document.addEventListener("backbutton", function() {
+        onWatchBackBtn: function (callback) {
+            document.addEventListener("deviceready", function () {
+                document.addEventListener("backbutton", function () {
                     callback() // 执行回调,
                 }, false);
             }, false);
         },
         // 退出H5小应用
-        functionback: function() {
+        functionback: function () {
             var u = navigator.userAgent,
                 app = navigator.appVersion;
             var isAndroid = u.indexOf('Android') > -1 || u.indexOf('Linux') > -1;
@@ -279,48 +315,20 @@ var spring = (function() {
         // transtype: "request_token" 通过原生获取用户的信息,ip,port,token,登录的信息和domain
         // transtype: "serviceCall" 通过原生去调ma拿数据
         // transtype: "takephote" 通过原生打开相机,并返回解压后的base64
-        callServiceNative: function(options) {
-            // 如果不传params,默认的获取的是用户的信息
-            var transType = typeof options.transtype === "undefined" ? "request_token" : options.transtype;
-            var params = {
-                "params": {
-                    transtype: transType,
-                    innerParams: options.innerParams ? options.innerParams : {}
-                },
-                "callback": function(data) {
-                    // 对数据做一些处理
-                    options.callback(data)
-                },
-                "error": function(err) {
-                    // 对数据做一些处理
-                    options.error(err)
-                }
+        callServiceNative: function (params, flag) {
+            if (arguments.length === 1) {
+                flag = false
             }
-            if (options.innerParams) {
-                params.params.innerParams = options.innerParams
-            }
-            if (options.controllerId) {
-                params.params.controllerId = options.controllerId
-            }
-            // false:异步   true: 同步
-            summer.callService("SummerService.gotoNative", params, false);
+            summer.callService("SummerService.gotoNative", params, flag);
         },
-        requestParams: function() {
-            var request = {}
-            request.appid = this.appid; // appid
-            request.viewid = this.viewid; // 后台ma controller
-            request.action = this.action; // controller中的方法,默认handler,可以传入
-            request.ip = this.ip;
-            request.port = this.port;
-            request.token = "";
-            request.isHttps = false
-            request.params = {
+        setRequestParams: function (appid, action, params) {
+            var params = {
                 "serviceid": "umCommonService",
                 "appcontext": {
-                    "appid": request.appid,
+                    "appid": appid,
                     "tabid": "",
                     "funcid": "",
-                    "funcode": request.appid,
+                    "funcode": appid,
                     "userid": "",
                     "forelogin": "",
                     "token": "",
@@ -333,17 +341,12 @@ var spring = (function() {
                 },
                 "servicecontext": {
                     "actionid": "",
-                    "viewid": request.viewid,
+                    "viewid": this.controller,
                     "contextmapping": {
                         "result": "result"
                     },
-                    "params": {
-                        "chamc_mobiletoken": request.token,
-                        "transtype": "urlparamrequest",
-                        "contextmapping": '{"result" : "result"}',
-                        "reqmethod": "POST",
-                    },
-                    "actionname": request.action,
+                    "params": params,
+                    "actionname": action,
                     "callback": ""
                 },
                 "deviceinfo": {
@@ -373,23 +376,12 @@ var spring = (function() {
                         "heigth": window.screen.height
                     }
                 }
-
             };
-            return {
-                requestParams: request
-            }
+            return params
         }
     }
-    return (function() {
+    return (function () {
         // 现在js库比较小，可以再页面加载时，全部加载。复杂的时候，还是使用惰性加载比较好。
-        return {
-            init: function(options) {
-                if (this instanceof Spring) {
-                    return
-                }
-                window.spring = new Spring(options)
-                return spring
-            }
-        }
+        window.spring = spring = new Spring()
     })()
-})();
+})(window);
